@@ -37,49 +37,74 @@ class MyXchangeClient(xchange_client.XChangeClient):
     async def trade(self):
         """This is a task that is started right before the bot connects and runs in the background."""
         await asyncio.sleep(5)
-        print("attempting to trade")
-        await self.place_order("BRV",3, xchange_client.Side.SELL, 7)
+        
+        # print("attempting to trade")
+        # await self.place_order("BRV",3, xchange_client.Side.SELL, 7)
 
-        # Cancelling an order
-        order_to_cancel = await self.place_order("BRV",3, xchange_client.Side.BUY, 5)
-        await asyncio.sleep(5)
-        await self.cancel_order(order_to_cancel)
+        # # Cancelling an order
+        # order_to_cancel = await self.place_order("BRV",3, xchange_client.Side.BUY, 5)
+        # await asyncio.sleep(5)
+        # await self.cancel_order(order_to_cancel)
 
-        # Placing Swap requests
-        await self.place_swap_order('toJAK', 1)
-        await asyncio.sleep(5)
-        await self.place_swap_order('fromSCP', 1)
-        await asyncio.sleep(5)
+        # # Placing Swap requests
+        # await self.place_swap_order('toJAK', 1)
+        # await asyncio.sleep(5)
+        # await self.place_swap_order('fromSCP', 1)
+        # await asyncio.sleep(5)
 
-        # Placing an order that gets rejected for exceeding qty limits
-        await self.place_order("BRV",1000, xchange_client.Side.SELL, 7)
-        await asyncio.sleep(5)
+        # # Placing an order that gets rejected for exceeding qty limits
+        # await self.place_order("BRV",1000, xchange_client.Side.SELL, 7)
+        # await asyncio.sleep(5)
 
+        # # Placing a market order
+        # market_order_id = await self.place_order("BRV",10, xchange_client.Side.SELL)
+        # print("Market Order ID:", market_order_id)
+        # await asyncio.sleep(5)
+        
         # Placing a market order
-        market_order_id = await self.place_order("BRV",10, xchange_client.Side.SELL)
+        market_order_id = await self.place_order("MKU",100, xchange_client.Side.SELL)
         print("Market Order ID:", market_order_id)
         await asyncio.sleep(5)
 
         # Viewing Positions
         print("My positions:", self.positions)
 
+    def calc_weighted_averages(self, bids, asks):
+        def weighted_average(prices):
+            total = sum(price * freq for price, freq in prices)
+            weight_sum = sum(freq for _, freq in prices)
+            return total / weight_sum if weight_sum else 0
+
+        # Calculate weighted averages for bids and asks
+        bid_weighted_average = weighted_average(bids)
+        ask_weighted_average = weighted_average(asks)
+
+        return (bid_weighted_average, ask_weighted_average)
+
     async def view_books(self):
-        """Prints the books every 3 seconds."""
+        """Prints the books every 3 seconds with weighted averages."""
         while True:
             await asyncio.sleep(3)
+            weighted_avg_dict = {}
             for security, book in self.order_books.items():
                 sorted_bids = sorted((k,v) for k,v in book.bids.items() if v != 0)
                 sorted_asks = sorted((k,v) for k,v in book.asks.items() if v != 0)
-                print(f"Bids for {security}:\n{sorted_bids}")
-                print(f"Asks for {security}:\n{sorted_asks}")
+                #print(f"Bids for {security}:\n{sorted_bids}")
+                #print(f"Asks for {security}:\n{sorted_asks}")
+                #print("BIDS", security, sorted_bids)
+                #print("ASKS", security, sorted_asks)
+                #print(weighted_averages)
+                weighted_avg_dict[security] = self.calc_weighted_averages(sorted_bids, sorted_asks) # returns a tuple
+            print("Weighted averages:", weighted_avg_dict)
 
+    
     async def start(self):
         """
         Creates tasks that can be run in the background. Then connects to the exchange
         and listens for messages.
         """
         asyncio.create_task(self.trade())
-        # asyncio.create_task(self.view_books())
+        asyncio.create_task(self.view_books())
         await self.connect()
 
 
