@@ -84,14 +84,13 @@ class MyXchangeClient(xchange_client.XChangeClient):
 
 
 async def main():
-    SERVER = 'staging.uchicagotradingcompetition.com:3333' # run on sandbox
-    my_client = MyXchangeClient(SERVER,"USERNAME","PASSWORD")
+    SERVER = '18.188.190.235:3333' # run on sandbox
+    my_client = MyXchangeClient(SERVER,"nyu","graveler-dodrio-8874")
     await my_client.start()
     return
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     result = loop.run_until_complete(main())
-
 
 
