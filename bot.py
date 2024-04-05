@@ -2,7 +2,8 @@ from typing import Optional
 
 from xchangelib import xchange_client
 import asyncio
-
+import statistics
+import math
 
 class MyXchangeClient(xchange_client.XChangeClient):
     '''A shell client with the methods that can be implemented to interact with the xchange.'''
@@ -38,6 +39,8 @@ class MyXchangeClient(xchange_client.XChangeClient):
         """This is a task that is started right before the bot connects and runs in the background."""
         await asyncio.sleep(5)
         
+        # # example code
+        
         # print("attempting to trade")
         # await self.place_order("BRV",3, xchange_client.Side.SELL, 7)
 
@@ -61,18 +64,27 @@ class MyXchangeClient(xchange_client.XChangeClient):
         # print("Market Order ID:", market_order_id)
         # await asyncio.sleep(5)
         
-        # Placing a market order
-        market_order_id = await self.place_order("MKU",100, xchange_client.Side.SELL)
-        print("Market Order ID:", market_order_id)
-        await asyncio.sleep(5)
+        count = 0
+        # shorting the ETF's
+        if count == 0:
+            market_order_id = await self.place_order("JAK",5, xchange_client.Side.SELL)
+            print("Market Order ID:", market_order_id)
+            await asyncio.sleep(5)
+            
+            market_order_id = await self.place_order("SCP",5, xchange_client.Side.SELL)
+            print("Market Order ID:", market_order_id)
+            await asyncio.sleep(5)
+            count += 1
+
+        # 
 
         # Viewing Positions
         print("My positions:", self.positions)
 
     def calc_weighted_averages(self, bids, asks):
         def weighted_average(prices):
-            total = sum(price * freq for price, freq in prices)
-            weight_sum = sum(freq for _, freq in prices)
+            total = sum(price * freq for price, freq, _ in prices)
+            weight_sum = sum(freq for _, freq, _ in prices)
             return total / weight_sum if weight_sum else 0
 
         # Calculate weighted averages for bids and asks
@@ -82,21 +94,34 @@ class MyXchangeClient(xchange_client.XChangeClient):
         return (bid_weighted_average, ask_weighted_average)
 
     async def view_books(self):
-        """Prints the books every 3 seconds with weighted averages."""
+        """Prints the books every 3 seconds with weighted averages.
+            Books include (price, amount, standard deviation) for each order"""
         while True:
             await asyncio.sleep(3)
             weighted_avg_dict = {}
-            for security, book in self.order_books.items():
-                sorted_bids = sorted((k,v) for k,v in book.bids.items() if v != 0)
-                sorted_asks = sorted((k,v) for k,v in book.asks.items() if v != 0)
-                #print(f"Bids for {security}:\n{sorted_bids}")
-                #print(f"Asks for {security}:\n{sorted_asks}")
-                #print("BIDS", security, sorted_bids)
-                #print("ASKS", security, sorted_asks)
-                #print(weighted_averages)
-                weighted_avg_dict[security] = self.calc_weighted_averages(sorted_bids, sorted_asks) # returns a tuple
-            print("Weighted averages:", weighted_avg_dict)
 
+            for security, book in self.order_books.items():
+                all_prices = [k for k, v in book.bids.items() if v != 0] + [k for k, v in book.asks.items() if v != 0]
+                if not all_prices:
+                    continue
+                
+                # Calculate mean of k
+                mean_k = sum(all_prices) / len(all_prices)
+                
+                # Calculate standard deviation of k
+                variance = sum((k - mean_k) ** 2 for k in all_prices) / len(all_prices)
+                std_dev = math.sqrt(variance)
+                
+                # Adjust bids and asks by adding standard deviation from mean to each (k, v) tuple
+                adjusted_bids = [(k, v, (k - mean_k) / std_dev if std_dev else 0) for k, v in book.bids.items() if v != 0]
+                adjusted_asks = [(k, v, (k - mean_k) / std_dev if std_dev else 0) for k, v in book.asks.items() if v != 0]
+
+                weighted_avg_dict[security] = self.calc_weighted_averages(adjusted_bids, adjusted_asks)  # returns a tuple
+                print("mean:", mean_k)
+                print(f"bids for {security}", adjusted_bids)
+                print(f"asks for {security}", adjusted_asks)
+                
+            print("Weighted averages:", weighted_avg_dict)
     
     async def start(self):
         """
