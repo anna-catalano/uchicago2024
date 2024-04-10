@@ -9,86 +9,90 @@ from itertools import combinations
 
 data = pd.read_csv('Case 2 Data 2024.csv', index_col = 0)
 
-'''
-We recommend that you change your train and test split
-'''
-
 TRAIN, TEST = train_test_split(data, test_size = 0.3, shuffle = False)
 
 class Allocator():
     def __init__(self, train_data):
-        '''
-        Anything data you want to store between days must be stored in a class field
-        '''
-        
         self.running_price_paths = train_data.copy()
-        
         self.train_data = train_data.copy()
         
-        # Do any preprocessing here -- do not touch running_price_paths, it will store the price path up to that data
-   
-    def calculate_portfolio_sharpe_ratio(self, portfolio_stocks):
+    def calculate_correlation_coefficient(self, portfolio_stocks):
         if len(self.running_price_paths) > 252:
             last_year_data = self.running_price_paths.iloc[-252:]
         else:
             last_year_data = self.running_price_paths
 
         daily_returns = last_year_data[portfolio_stocks].pct_change().dropna()
-        average_daily_return = daily_returns.mean(axis=1)
-        mean_return = average_daily_return.mean()
-        std_dev = average_daily_return.std()
+        # Calculate the correlation coefficient of the returns
+        correlation_matrix = daily_returns.corr()
+        return correlation_matrix.iloc[0, 1]  # Return the correlation between the two stocks
+    
+    def calculate_sharpe_ratio(self, stock_name):
+        if len(self.running_price_paths) > 252:
+            last_year_data = self.running_price_paths.iloc[-252:]
+        else:
+            last_year_data = self.running_price_paths
+        
+        daily_returns = last_year_data[stock_name].pct_change().dropna()
+        mean_return = daily_returns.mean()
+        std_dev = daily_returns.std()
 
-        sharpe_ratio = mean_return / std_dev if std_dev != 0 else 0
-        return abs(sharpe_ratio)     
+        if std_dev != 0:
+            sharpe_ratio = mean_return / std_dev
+        else:
+            sharpe_ratio = 0
+
+        return sharpe_ratio
+
         
     def allocate_portfolio(self, asset_prices):
-        #print("asset", asset_prices, type(asset_prices))
-        #if not isinstance(asset_prices, np.ndarray) or len(asset_prices) != 6:
-        #    raise ValueError("asset_prices must be a numpy array of length 6.")
+        # Assumptions made for simplification; adjust as needed.
+        new_row = pd.DataFrame([asset_prices], columns=self.train_data.columns)
+        self.running_price_paths = pd.concat([self.running_price_paths, new_row], ignore_index=True)
 
-        #new_row = pd.DataFrame([asset_prices], columns=self.train_data.columns)
-        #self.running_price_paths = pd.concat([self.running_price_paths, new_row], ignore_index=True)
-        self.running_price_paths = pd.concat([self.running_price_paths, asset_prices], ignore_index=True)
-        self.running_price_paths.drop(0, axis=1, inplace=True)
-        
         column_names_map = {name: idx for idx, name in enumerate(self.running_price_paths.columns)}
-        
-        max_sharpes = [-1, -1, -1]  # Dummy populate with -1
-        max_pairs = ['', '', '']
-        for first, second in combinations(self.running_price_paths.columns, 2):
-            print("fs", first, second)
-            sr = self.calculate_portfolio_sharpe_ratio([first, second])
-            min_sharpe = min(max_sharpes)
-            if sr > min_sharpe:
-                min_index = max_sharpes.index(min_sharpe)
-                max_sharpes[min_index] = sr
-                max_pairs[min_index] = first + second
-        
-        unique_stocks = set(''.join(max_pairs))
-        weights = np.zeros(6)
-        
-        if len(unique_stocks) == 4:
-            max_index = max_sharpes.index(max(max_sharpes))
+
+        # Calculate Sharpe ratios for individual stocks
+        sharpe_ratios = {stock: self.calculate_sharpe_ratio(stock) for stock in self.running_price_paths.columns}
+
+        # Calculate and sort correlation coefficients
+        correlations = [(self.calculate_correlation_coefficient([first, second]), first, second) 
+                        for first, second in combinations(self.running_price_paths.columns, 2)]
+        correlations.sort(key=lambda x: abs(x[0]), reverse=True)
+
+        # Select the top 3 most correlated pairs
+        top_correlations = correlations[:3]
+
+        # Identify unique stocks from top pairs
+        unique_stocks = set([stock for _, stock1, stock2 in top_correlations for stock in [stock1, stock2]])
+
+        # Determine weights
+        weights = np.zeros(len(column_names_map))
+        if unique_stocks:
+            # Determine which stock has the highest Sharpe ratio among the unique stocks
+            highest_sharpe_stock = max(unique_stocks, key=lambda x: sharpe_ratios[x])
+            highest_sharpe_ratio = sharpe_ratios[highest_sharpe_stock]
+
+            # Allocate weights
             for stock in unique_stocks:
-                if stock in max_pairs[max_index]:
-                    weights[column_names_map[stock]] = 0.4
+                if stock == highest_sharpe_stock:
+                    if len(unique_stocks) == 4:
+                        weights[column_names_map[stock]] = 0.4
+                    elif len(unique_stocks) == 5:
+                        weights[column_names_map[stock]] = 0.3
+                    elif len(unique_stocks) == 6:
+                        weights[column_names_map[stock]] = 0.2
                 else:
-                    weights[column_names_map[stock]] = 0.2
-        elif len(unique_stocks) == 5:
-            max_index = max_sharpes.index(max(max_sharpes))
-            for stock in unique_stocks:
-                if stock in max_pairs[max_index]:
-                    weights[column_names_map[stock]] = 0.3
-                else:
-                    weights[column_names_map[stock]] = 0.175
-        elif len(unique_stocks) == 6:
-            for stock in unique_stocks:
-                weights[column_names_map[stock]] = 0.16
-            max_index = max_sharpes.index(max(max_sharpes))
-            weights[column_names_map[max_pairs[max_index][0]]] = 0.2
-            weights[column_names_map[max_pairs[max_index][1]]] = 0.2
-        
+                    if len(unique_stocks) == 4:
+                        weights[column_names_map[stock]] = 0.2
+                    elif len(unique_stocks) == 5:
+                        weights[column_names_map[stock]] = 0.175
+                    elif len(unique_stocks) == 6:
+                        weights[column_names_map[stock]] = 0.16
+
         return weights
+
+
 
 
 def grading(train_data, test_data): 
