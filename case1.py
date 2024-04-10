@@ -69,10 +69,10 @@ class MyXchangeClient(xchange_client.XChangeClient):
         # only short the two ETFs one time
         count = 0
         if count == 0:
-            market_order_id = await self.place_order("JAK",5, xchange_client.Side.SELL)
+            market_order_id = await self.place_order("JAK",20, xchange_client.Side.SELL)
             print("Market Order ID:", market_order_id)
             
-            market_order_id = await self.place_order("SCP",5, xchange_client.Side.SELL)
+            market_order_id = await self.place_order("SCP",20, xchange_client.Side.SELL)
             print("Market Order ID:", market_order_id)
             
             count += 1
@@ -86,13 +86,13 @@ class MyXchangeClient(xchange_client.XChangeClient):
             for order in books['bids']:
                 price, amt, stdev = order
                 # if the standard deviation for the current bid exceeds 2, buy
-                if stdev <= -1: 
+                if stdev <= -0.5: 
                     market_order_id = await self.place_order(security, 3, xchange_client.Side.BUY)
                     print("Market Order ID:", market_order_id)
                     lower_margin_count += 1
             for order in books['asks']:
                 price, amt, stdev = order
-                if stdev >= 1: 
+                if stdev >= 0.5: 
                     market_order_id = await self.place_order(security, 3, xchange_client.Side.SELL)
                     print("Market Order ID:", market_order_id)
                     upper_margin_count += 1
@@ -192,5 +192,3 @@ async def main():
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     result = loop.run_until_complete(main())
-
-
